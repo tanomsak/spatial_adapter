@@ -3,6 +3,9 @@ require 'active_record/connection_adapters/postgresql_adapter'
 
 module ActiveRecord::ConnectionAdapters
   class PostgreSQLAdapter
+
+    NATIVE_DATABASE_TYPES.merge!(SpatialAdapter.geometry_data_types)
+
     def postgis_version
       begin
         select_value("SELECT postgis_full_version()").scan(/POSTGIS="([\d\.]*)"/)[0][0]
@@ -29,11 +32,6 @@ module ActiveRecord::ConnectionAdapters
       postgis_major_version > 1 || (postgis_major_version == 1 && postgis_minor_version >= 5)
     end
 
-    alias :original_native_database_types :native_database_types
-    def native_database_types
-      original_native_database_types.merge!(SpatialAdapter.geometry_data_types)
-    end
-
     alias :original_quote :quote
     #Redefines the quote method to add behaviour for when a Geometry is encountered
     def quote(value, column = nil)
@@ -41,6 +39,15 @@ module ActiveRecord::ConnectionAdapters
         "'#{value.as_hex_ewkb}'"
       else
         original_quote(value,column)
+      end
+    end
+
+    alias :original_type_cast :type_cast
+    def type_cast(value, column)
+      if value.kind_of?(GeoRuby::SimpleFeatures::Geometry)
+        value.as_hex_ewkb
+      else
+        original_type_cast(value, column)
       end
     end
 
